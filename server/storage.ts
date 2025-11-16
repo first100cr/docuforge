@@ -1,27 +1,18 @@
-import { type ConversionJob, type InsertConversionJob } from "@shared/schema";
+// server/storage.js
 import { randomUUID } from "crypto";
 
-export interface IStorage {
-  getConversionJob(id: string): Promise<ConversionJob | undefined>;
-  createConversionJob(job: InsertConversionJob): Promise<ConversionJob>;
-  updateConversionJob(id: string, updates: Partial<ConversionJob>): Promise<ConversionJob | undefined>;
-  deleteConversionJob(id: string): Promise<void>;
-}
-
-export class MemStorage implements IStorage {
-  private conversionJobs: Map<string, ConversionJob>;
-
+class MemStorage {
   constructor() {
     this.conversionJobs = new Map();
   }
 
-  async getConversionJob(id: string): Promise<ConversionJob | undefined> {
+  async getConversionJob(id) {
     return this.conversionJobs.get(id);
   }
 
-  async createConversionJob(insertJob: InsertConversionJob): Promise<ConversionJob> {
+  async createConversionJob(insertJob) {
     const id = randomUUID();
-    const job: ConversionJob = {
+    const job = {
       id,
       originalFilename: insertJob.originalFilename,
       originalFormat: insertJob.originalFormat,
@@ -36,18 +27,18 @@ export class MemStorage implements IStorage {
     return job;
   }
 
-  async updateConversionJob(id: string, updates: Partial<ConversionJob>): Promise<ConversionJob | undefined> {
+  async updateConversionJob(id, updates) {
     const job = this.conversionJobs.get(id);
     if (!job) return undefined;
-    
     const updatedJob = { ...job, ...updates };
     this.conversionJobs.set(id, updatedJob);
     return updatedJob;
   }
 
-  async deleteConversionJob(id: string): Promise<void> {
+  async deleteConversionJob(id) {
     this.conversionJobs.delete(id);
   }
 }
 
-export const storage = new MemStorage();
+const storage = new MemStorage();
+export default storage;
