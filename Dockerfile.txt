@@ -1,0 +1,38 @@
+# Stage 1: Build the frontend
+FROM node:18 AS frontend-builder
+ 
+WORKDIR /app/client
+ 
+COPY client/package*.json ./
+RUN npm install
+ 
+COPY client ./
+RUN npm run build
+ 
+# Stage 2: Build the backend
+FROM node:18 AS backend
+ 
+WORKDIR /app
+ 
+# Copy backend files
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY tailwind.config.ts ./
+COPY drizzle.config.ts ./
+COPY replit.md ./
+COPY .gitignore ./
+COPY server ./server
+COPY shared ./shared
+COPY node_modules ./node_modules
+ 
+# Copy frontend build from previous stage
+COPY --from=frontend-builder /app/client/dist ./client/dist
+ 
+# Install backend dependencies
+RUN npm install
+ 
+# Expose backend port
+EXPOSE 3500
+ 
+# Start the backend
+CMD ["npm", "start"]
