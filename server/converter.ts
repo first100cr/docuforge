@@ -7,7 +7,8 @@ import libre from "libreoffice-convert";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { createWorker } from "tesseract.js";
 import OpenAI from "openai";
-import { promisify } from "node:util"; // <-- ESM-safe import
+import { promisify } from "node:util";
+import pdfParse from "pdf-parse";
 
 // promisify libre.convert so it works in ESM bundles
 libre.convertAsync = promisify(libre.convert);
@@ -118,18 +119,34 @@ class DocumentConverter {
     return outputPath;
   }
 
-  // PDF -> Word (basic text extraction into a .docx)
+  // PDF -> Word (text extraction into a .docx)
   async pdfToWord(pdfPath, baseName) {
     await this.ensureDir(this.convertedDir);
     const outputPath = path.join(this.convertedDir, `${baseName}.docx`);
+    
+    // Extract text using pdf-parse
     const text = await this.extractPdfText(pdfPath);
+    
+    // Check if we got meaningful text
+    if (!text || text === "No text found (scanned PDF?)") {
+      throw new Error("Unable to extract text from PDF. This might be a scanned/image-based PDF. Try using OCR conversion instead.");
+    }
+
+    // Split text into paragraphs for better formatting
+    const paragraphs = text.split('\n\n').filter(p => p.trim().length > 0);
+    
     const doc = new Document({
       sections: [
         {
-          children: [new Paragraph({ children: [new TextRun({ text, size: 22 })] })],
+          children: paragraphs.map(paraText => 
+            new Paragraph({ 
+              children: [new TextRun({ text: paraText.trim(), size: 22 })] 
+            })
+          ),
         },
       ],
     });
+    
     const buffer = await Packer.toBuffer(doc);
     await fs.writeFile(outputPath, buffer);
     return outputPath;
@@ -160,22 +177,23 @@ class DocumentConverter {
     return outputPath;
   }
 
-  // Extract PDF text
+  // Extract PDF text using pdf-parse
   async extractPdfText(pdfPath) {
-    const data = await fs.readFile(pdfPath);
-    const pdf = await PDFDocument.load(data);
-    let text = "";
-    for (const page of pdf.getPages()) {
-      // pdf-lib does not have getText() in some versions; if it doesn't exist,
-      // this will return empty. Keep parity with your original approach.
-      if (typeof page.getText === "function") {
-        text += page.getText();
-      } else {
-        // fallback: no text extraction available
-        text += "";
+    try {
+      const dataBuffer = await fs.readFile(pdfPath);
+      const data = await pdfParse(dataBuffer);
+      
+      const text = data.text.trim();
+      
+      if (!text || text.length === 0) {
+        return "No text found (scanned PDF?)";
       }
+      
+      return text;
+    } catch (error) {
+      console.error("PDF text extraction error:", error);
+      return "No text found (scanned PDF?)";
     }
-    return text || "No text found (scanned PDF?)";
   }
 
   // Split PDF into single-page PDFs
@@ -219,16 +237,19 @@ class DocumentConverter {
   // OCR using tesseract.js
   async performOCR(inputPath, baseName) {
     await this.ensureDir(this.convertedDir);
-    const worker = createWorker();
-    // prepare worker properly
-    await worker.load();
-    await worker.loadLanguage("eng");
-    await worker.initialize("eng");
-    const { data } = await worker.recognize(inputPath);
-    await worker.terminate();
-    const out = path.join(this.convertedDir, `${baseName}-ocr.txt`);
-    await fs.writeFile(out, data.text);
-    return out;
+    const worker = await createWorker();
+    
+    try {
+      await worker.loadLanguage("eng");
+      await worker.initialize("eng");
+      const { data } = await worker.recognize(inputPath);
+      
+      const out = path.join(this.convertedDir, `${baseName}-ocr.txt`);
+      await fs.writeFile(out, data.text);
+      return out;
+    } finally {
+      await worker.terminate();
+    }
   }
 
   async scannedPdfToText(pdfPath, baseName) {
@@ -239,11 +260,16 @@ class DocumentConverter {
   // Summarize PDF via OpenAI
   async summarizePdf(pdfPath, baseName) {
     const text = await this.extractPdfText(pdfPath);
-    // note: adapt this call to match your OpenAI SDK version if necessary
+    
+    if (text === "No text found (scanned PDF?)") {
+      throw new Error("Cannot summarize: No text found in PDF. This might be a scanned document.");
+    }
+    
     const response = await this.openai.chat.completions.create({
       model: "gpt-4o",
       messages: [{ role: "user", content: `Summarize this document:\n${text}` }],
     });
+    
     const summary = response.choices?.[0]?.message?.content ?? "No summary";
     const out = path.join(this.convertedDir, `${baseName}-summary.txt`);
     await fs.writeFile(out, summary);
@@ -253,6 +279,11 @@ class DocumentConverter {
   // Extract tables using AI (returns raw model output)
   async extractTablesAI(pdfPath) {
     const text = await this.extractPdfText(pdfPath);
+    
+    if (text === "No text found (scanned PDF?)") {
+      throw new Error("Cannot extract tables: No text found in PDF. This might be a scanned document.");
+    }
+    
     const response = await this.openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
