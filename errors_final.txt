@@ -1,0 +1,9 @@
+﻿server/converter.ts(228,32): error TS2495: Type '{ Annots: PDFArray; Resources: PDFDict; Contents: PDFArray | undefined; Font: PDFDict; XObject: PDFDict; ExtGState: PDFDict; }' is not an array type or a string type.
+server/converter_fixed.ts(228,32): error TS2495: Type '{ Annots: PDFArray; Resources: PDFDict; Contents: PDFArray | undefined; Font: PDFDict; XObject: PDFDict; ExtGState: PDFDict; }' is not an array type or a string type.
+server/index.ts(11,9): error TS2339: Property 'rawBody' does not exist on type 'IncomingMessage'.
+server/index.ts(50,14): error TS7006: Parameter 'err' implicitly has an 'any' type.
+server/index.ts(50,19): error TS7006: Parameter '_req' implicitly has an 'any' type.
+server/index.ts(50,25): error TS7006: Parameter 'res' implicitly has an 'any' type.
+server/index.ts(50,30): error TS7006: Parameter '_next' implicitly has an 'any' type.
+server/routes.ts(102,9): error TS2322: Type 'string | string[]' is not assignable to type 'string | null | undefined'.
+  Type 'string[]' is not assignable to type 'string'.

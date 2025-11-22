@@ -1,0 +1,29 @@
+﻿server/converter.ts(228,32): error TS2495: Type '{ Annots: PDFArray; Resources: PDFDict; Contents: PDFArray | undefined; Font: PDFDict; XObject: PDFDict; ExtGState: PDFDict; }' is not an array type or a string type.
+server/converter.ts(248,20): error TS2339: Property 'loadLanguage' does not exist on type 'Worker'.
+server/converter.ts(249,20): error TS2551: Property 'initialize' does not exist on type 'Worker'. Did you mean 'reinitialize'?
+server/index.ts(11,9): error TS2339: Property 'rawBody' does not exist on type 'IncomingMessage'.
+server/index.ts(50,14): error TS7006: Parameter 'err' implicitly has an 'any' type.
+server/index.ts(50,19): error TS7006: Parameter '_req' implicitly has an 'any' type.
+server/index.ts(50,25): error TS7006: Parameter 'res' implicitly has an 'any' type.
+server/index.ts(50,30): error TS7006: Parameter '_next' implicitly has an 'any' type.
+server/routes.ts(48,31): error TS7006: Parameter 'app' implicitly has an 'any' type.
+server/routes.ts(49,57): error TS7006: Parameter 'req' implicitly has an 'any' type.
+server/routes.ts(49,62): error TS7006: Parameter 'res' implicitly has an 'any' type.
+server/routes.ts(78,35): error TS7006: Parameter 'req' implicitly has an 'any' type.
+server/routes.ts(78,40): error TS7006: Parameter 'res' implicitly has an 'any' type.
+server/routes.ts(114,42): error TS7006: Parameter 'req' implicitly has an 'any' type.
+server/routes.ts(114,47): error TS7006: Parameter 'res' implicitly has an 'any' type.
+server/routes.ts(127,53): error TS7006: Parameter 'err' implicitly has an 'any' type.
+server/routes.ts(146,37): error TS7006: Parameter 'req' implicitly has an 'any' type.
+server/routes.ts(146,42): error TS7006: Parameter 'res' implicitly has an 'any' type.
+server/storage.ts(6,10): error TS2551: Property 'conversionJobs' does not exist on type 'MemStorage'. Did you mean 'getConversionJob'?
+server/storage.ts(9,26): error TS7006: Parameter 'id' implicitly has an 'any' type.
+server/storage.ts(10,17): error TS2551: Property 'conversionJobs' does not exist on type 'MemStorage'. Did you mean 'getConversionJob'?
+server/storage.ts(13,29): error TS7006: Parameter 'insertJob' implicitly has an 'any' type.
+server/storage.ts(26,10): error TS2551: Property 'conversionJobs' does not exist on type 'MemStorage'. Did you mean 'getConversionJob'?
+server/storage.ts(30,29): error TS7006: Parameter 'id' implicitly has an 'any' type.
+server/storage.ts(30,33): error TS7006: Parameter 'updates' implicitly has an 'any' type.
+server/storage.ts(31,22): error TS2551: Property 'conversionJobs' does not exist on type 'MemStorage'. Did you mean 'getConversionJob'?
+server/storage.ts(34,10): error TS2551: Property 'conversionJobs' does not exist on type 'MemStorage'. Did you mean 'getConversionJob'?
+server/storage.ts(38,29): error TS7006: Parameter 'id' implicitly has an 'any' type.
+server/storage.ts(39,10): error TS2551: Property 'conversionJobs' does not exist on type 'MemStorage'. Did you mean 'getConversionJob'?

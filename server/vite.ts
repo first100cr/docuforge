@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 import express from "express";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
-import viteConfigDefault from "../vite.config.js";
+import viteConfigDefault from "../vite.config";
 
 const viteLogger = createLogger();
 

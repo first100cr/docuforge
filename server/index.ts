@@ -1,8 +1,8 @@
 // server/index.js
 import express from "express";
 import { createServer as createHttpServer } from "http";
-import registerRoutes from "./routes.js";
-import setupVite, { serveStatic } from "./vite.js";
+import registerRoutes from "./routes";
+import setupVite, { serveStatic } from "./vite";
 
 const app = express();
 
@@ -17,7 +17,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse;
+  let capturedJsonResponse: Record<string, any> | undefined = undefined;
   const originalJson = res.json.bind(res);
   res.json = function (bodyJson, ...args) {
     capturedJsonResponse = bodyJson;
@@ -61,7 +61,7 @@ app.use((req, res, next) => {
       serveStatic(app);
     }
 
-    const port = parseInt(process.env.PORT || "5000", 10);
+    const port = parseInt(process.env.PORT || "8005", 10);
     httpServer.listen(port, "0.0.0.0", () => {
       const timeStr = new Date().toLocaleTimeString("en-US", {
         hour: "numeric",

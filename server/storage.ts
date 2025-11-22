@@ -1,18 +1,42 @@
-// server/storage.js
+// server/storage.ts
 import { randomUUID } from "crypto";
 
+interface ConversionJob {
+  id: string;
+  originalFilename: string;
+  originalFormat: string;
+  targetFormat: string;
+  status: string;
+  inputPath: string;
+  outputPath: string | null;
+  fileSize: number;
+  createdAt: Date;
+}
+
+interface InsertJob {
+  originalFilename: string;
+  originalFormat: string;
+  targetFormat: string;
+  status?: string;
+  inputPath: string;
+  outputPath?: string | null;
+  fileSize: number;
+}
+
 class MemStorage {
+  conversionJobs: Map<string, ConversionJob>;
+
   constructor() {
     this.conversionJobs = new Map();
   }
 
-  async getConversionJob(id) {
+  async getConversionJob(id: string): Promise<ConversionJob | undefined> {
     return this.conversionJobs.get(id);
   }
 
-  async createConversionJob(insertJob) {
+  async createConversionJob(insertJob: InsertJob): Promise<ConversionJob> {
     const id = randomUUID();
-    const job = {
+    const job: ConversionJob = {
       id,
       originalFilename: insertJob.originalFilename,
       originalFormat: insertJob.originalFormat,
@@ -27,7 +51,7 @@ class MemStorage {
     return job;
   }
 
-  async updateConversionJob(id, updates) {
+  async updateConversionJob(id: string, updates: Partial<ConversionJob>): Promise<ConversionJob | undefined> {
     const job = this.conversionJobs.get(id);
     if (!job) return undefined;
     const updatedJob = { ...job, ...updates };
@@ -35,7 +59,7 @@ class MemStorage {
     return updatedJob;
   }
 
-  async deleteConversionJob(id) {
+  async deleteConversionJob(id: string): Promise<void> {
     this.conversionJobs.delete(id);
   }
 }

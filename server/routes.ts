@@ -1,11 +1,12 @@
-// server/routes.js
+// server/routes.ts
 import multer from "multer";
 import path from "path";
 import fs from "fs/promises";
 import { z } from "zod";
-import storage from "./storage.js";
-import converter from "./converter.js";
+import storage from "./storage";
+import converter from "./converter";
 import { createServer } from "http";
+import type { Request, Response, Express } from "express";
 
 const uploadStorage = multer.diskStorage({
   destination: "./server/uploads",
@@ -45,12 +46,13 @@ const conversionRequestSchema = z.object({
   jobId: z.string().uuid(),
 });
 
-async function registerRoutes(app) {
-  app.post("/api/upload", upload.single("file"), async (req, res) => {
+async function registerRoutes(app: Express) {
+  app.post("/api/upload", upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-      const fileSize = `${(req.file.size / 1024).toFixed(2)} KB`;
+
+      const fileSize = req.file.size;
       const fileExtension = path.extname(req.file.originalname).slice(1).toLowerCase();
       const job = await storage.createConversionJob({
         originalFilename: req.file.originalname,
@@ -66,7 +68,7 @@ async function registerRoutes(app) {
         success: true,
         jobId: job.id,
         filename: req.file.originalname,
-        fileSize,
+        fileSize: `${(fileSize / 1024).toFixed(2)} KB`,
         format: fileExtension,
       });
     } catch (error) {
@@ -75,7 +77,7 @@ async function registerRoutes(app) {
     }
   });
 
-  app.post("/api/convert", async (req, res) => {
+  app.post("/api/convert", async (req: Request, res: Response) => {
     try {
       const validationResult = conversionRequestSchema.safeParse(req.body);
       if (!validationResult.success) {
@@ -111,7 +113,7 @@ async function registerRoutes(app) {
     }
   });
 
-  app.get("/api/download/:jobId", async (req, res) => {
+  app.get("/api/download/:jobId", async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
       const job = await storage.getConversionJob(jobId);
@@ -143,7 +145,7 @@ async function registerRoutes(app) {
     }
   });
 
-  app.get("/api/job/:jobId", async (req, res) => {
+  app.get("/api/job/:jobId", async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
       const job = await storage.getConversionJob(jobId);

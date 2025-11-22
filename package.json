@@ -4,6 +4,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "dev": "tsx server/index.ts",
     "build": "vite build && npx esbuild server/index.ts server/routes.ts server/storage.ts server/converter.ts server/vite.ts --outdir=dist/server --platform=node --format=esm --packages=external && npx esbuild vite.config.ts --outdir=dist --platform=node --format=esm --packages=external",
     "start": "NODE_ENV=production node ./dist/server/index.js",
     "check": "tsc --noEmit",
