@@ -3,15 +3,16 @@ import { PDFDocument } from "pdf-lib";
 import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
-import libre from "libreoffice-convert";
+import { exec } from "child_process";
+import { promisify } from "node:util";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { createWorker } from "tesseract.js";
 import OpenAI from "openai";
-import { promisify } from "node:util";
 import { PDFParse } from "pdf-parse";
+import { createWriteStream } from "fs";
+import archiver from "archiver";
 
-// promisify libre.convert so it works in ESM bundles
-const convertAsync = promisify(libre.convert);
+const execAsync = promisify(exec);
 
 class DocumentConverter {
   uploadsDir: string;
@@ -97,63 +98,166 @@ class DocumentConverter {
     return outputPath;
   }
 
-  // PDF -> Image (simple placeholder implementation)
+  // PDF -> Image (using soffice)
   async pdfToImage(pdfPath: string, baseName: string, ext: string) {
     await this.ensureDir(this.convertedDir);
-    const output = path.join(this.convertedDir, `${baseName}.${ext}`);
-    // placeholder: create a white PNG/JPEG as a fallback
-    const placeholder = await sharp({
-      create: { width: 800, height: 1000, channels: 3, background: "white" },
-    }).png().toBuffer();
-    if (ext === "jpg") {
-      await sharp(placeholder).jpeg({ quality: 80 }).toFile(output);
+
+    // Check page count to decide strategy
+    const pdfBuffer = await fs.readFile(pdfPath);
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
+    const pageCount = pdfDoc.getPageCount();
+
+    if (pageCount > 1) {
+      // Multi-page: Split -> Convert each -> Zip
+      const tempDir = path.join(this.convertedDir, `temp_${baseName}_${Date.now()}`);
+      await this.ensureDir(tempDir);
+
+      try {
+        const imageFiles: string[] = [];
+
+        // Split and convert each page
+        for (let i = 0; i < pageCount; i++) {
+          const newPdf = await PDFDocument.create();
+          const [page] = await newPdf.copyPages(pdfDoc, [i]);
+          newPdf.addPage(page);
+
+          const pageBaseName = `${baseName}-page-${i + 1}`;
+          const pagePdfPath = path.join(tempDir, `${pageBaseName}.pdf`);
+          await fs.writeFile(pagePdfPath, await newPdf.save());
+
+          // Convert this page PDF to image
+          const cmd = `soffice --headless --convert-to ${ext} --outdir "${tempDir}" "${pagePdfPath}"`;
+          await execAsync(cmd);
+
+          // Expected output filename from soffice
+          const expectedImageName = `${pageBaseName}.${ext}`;
+          const expectedImagePath = path.join(tempDir, expectedImageName);
+
+          // Verify existence
+          try {
+            await fs.access(expectedImagePath);
+            imageFiles.push(expectedImageName);
+          } catch (e) {
+            console.error(`Failed to convert page ${i + 1}`, e);
+          }
+        }
+
+        if (imageFiles.length === 0) {
+          throw new Error("No images generated from multi-page PDF");
+        }
+
+        // Zip them
+        const zipPath = path.join(this.convertedDir, `${baseName}-images.zip`);
+        const output = createWriteStream(zipPath);
+        const archive = archiver("zip", { zlib: { level: 9 } });
+
+        return new Promise<string>((resolve, reject) => {
+          output.on("close", async () => {
+            await fs.rm(tempDir, { recursive: true, force: true });
+            resolve(zipPath);
+          });
+          archive.on("error", (err) => reject(err));
+          archive.pipe(output);
+          for (const file of imageFiles) {
+            archive.file(path.join(tempDir, file), { name: file });
+          }
+          archive.finalize();
+        });
+
+      } catch (error: any) {
+        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => { });
+        console.error("Multi-page conversion error:", error);
+        throw new Error(`Conversion failed: ${error.message}`);
+      }
     } else {
-      await fs.writeFile(output, placeholder);
+      // Single page: Convert directly
+      const tempDir = path.join(this.convertedDir, `temp_${baseName}_${Date.now()}`);
+      await this.ensureDir(tempDir);
+
+      try {
+        const cmd = `soffice --headless --convert-to ${ext} --outdir "${tempDir}" "${pdfPath}"`;
+        console.log("Executing conversion command:", cmd);
+        await execAsync(cmd);
+
+        const files = await fs.readdir(tempDir);
+        const imageFiles = files.filter(f => f.toLowerCase().endsWith(`.${ext}`));
+
+        if (imageFiles.length === 0) {
+          throw new Error("No images generated from PDF conversion");
+        }
+
+        // Move the single file
+        const source = path.join(tempDir, imageFiles[0]);
+        const target = path.join(this.convertedDir, `${baseName}.${ext}`);
+        await fs.rename(source, target);
+        await fs.rm(tempDir, { recursive: true, force: true });
+        return target;
+
+      } catch (error: any) {
+        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => { });
+        console.error("Single-page conversion error:", error);
+        throw new Error(`Conversion failed: ${error.message}`);
+      }
     }
-    return output;
   }
 
-  // OFFICE -> PDF using libreoffice
+  // OFFICE -> PDF using direct soffice call
   async officeToPdf(inputPath: string, baseName: string) {
     await this.ensureDir(this.convertedDir);
     const outputPath = path.join(this.convertedDir, `${baseName}.pdf`);
-    const buffer = await fs.readFile(inputPath);
-    const pdfBuf = await convertAsync(buffer, ".pdf", undefined);
-    await fs.writeFile(outputPath, pdfBuf);
-    return outputPath;
+
+    try {
+      // --headless: no UI
+      // --convert-to pdf: output format
+      // --outdir: output directory
+      const cmd = `soffice --headless --convert-to pdf --outdir "${this.convertedDir}" "${inputPath}"`;
+      console.log("Executing conversion command:", cmd);
+      await execAsync(cmd);
+
+      const expectedOutput = path.join(this.convertedDir, path.parse(inputPath).name + ".pdf");
+
+      if (expectedOutput !== outputPath) {
+        await fs.rename(expectedOutput, outputPath);
+      }
+
+      return outputPath;
+    } catch (error: any) {
+      console.error("LibreOffice conversion error:", error);
+      throw new Error(`Conversion failed: ${error.message}`);
+    }
   }
 
-  // PDF -> Word (text extraction into a .docx)
+  // PDF -> Word (using direct soffice call for reliability)
   async pdfToWord(pdfPath: string, baseName: string) {
     await this.ensureDir(this.convertedDir);
     const outputPath = path.join(this.convertedDir, `${baseName}.docx`);
 
-    // Extract text using pdf-parse
-    const text = await this.extractPdfText(pdfPath);
+    // We use the input pdfPath directly since it's already a file on disk
+    // Run soffice conversion
+    // --headless: no UI
+    // --infilter="writer_pdf_import": force PDF import
+    // --convert-to docx: output format
+    // --outdir: output directory
+    try {
+      const cmd = `soffice --headless --infilter="writer_pdf_import" --convert-to docx --outdir "${this.convertedDir}" "${pdfPath}"`;
+      console.log("Executing conversion command:", cmd);
+      await execAsync(cmd);
 
-    // Check if we got meaningful text
-    if (!text || text === "No text found (scanned PDF?)") {
-      throw new Error("Unable to extract text from PDF. This might be a scanned/image-based PDF. Try using OCR conversion instead.");
+      // soffice uses the input filename for the output, so we might need to rename if baseName is different
+      // But here pdfPath is likely uploads/filename.pdf, so output will be converted/filename.docx
+      // We need to ensure the output filename matches what we expect
+
+      const expectedOutput = path.join(this.convertedDir, path.parse(pdfPath).name + ".docx");
+
+      if (expectedOutput !== outputPath) {
+        await fs.rename(expectedOutput, outputPath);
+      }
+
+      return outputPath;
+    } catch (error: any) {
+      console.error("LibreOffice conversion error:", error);
+      throw new Error(`Conversion failed: ${error.message}`);
     }
-
-    // Split text into paragraphs for better formatting
-    const paragraphs = text.split('\n\n').filter((p: string) => p.trim().length > 0);
-
-    const doc = new Document({
-      sections: [
-        {
-          children: paragraphs.map((paraText: string) =>
-            new Paragraph({
-              children: [new TextRun({ text: paraText.trim(), size: 22 })]
-            })
-          ),
-        },
-      ],
-    });
-
-    const buffer = await Packer.toBuffer(doc);
-    await fs.writeFile(outputPath, buffer);
-    return outputPath;
   }
 
   // COMPRESS PDF (basic)
@@ -185,7 +289,7 @@ class DocumentConverter {
   async extractPdfText(pdfPath: string): Promise<string> {
     try {
       const dataBuffer = await fs.readFile(pdfPath);
-      const parser = new PDFParse(dataBuffer);
+      const parser = new PDFParse(new Uint8Array(dataBuffer));
       const data = await parser.getText();
 
       const text = data.text.trim();

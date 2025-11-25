@@ -6,6 +6,14 @@ import setupVite, { serveStatic } from "./vite";
 
 const app = express();
 
+declare global {
+  namespace Express {
+    interface Request {
+      rawBody?: Buffer;
+    }
+  }
+}
+
 app.use(express.json({
   verify: (req, _res, buf) => {
     req.rawBody = buf;
@@ -47,7 +55,7 @@ app.use((req, res, next) => {
   try {
     const httpServer = await registerRoutes(app);
     // Error handler (last resort)
-    app.use((err, _req, res, _next) => {
+    app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
       res.status(status).json({ message });
@@ -61,7 +69,7 @@ app.use((req, res, next) => {
       serveStatic(app);
     }
 
-    const port = parseInt(process.env.PORT || "8005", 10);
+    const port = parseInt(process.env.PORT || "5000", 10);
     httpServer.listen(port, "0.0.0.0", () => {
       const timeStr = new Date().toLocaleTimeString("en-US", {
         hour: "numeric",
